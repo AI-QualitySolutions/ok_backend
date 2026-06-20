@@ -79,6 +79,13 @@ from camera.views import (
 
     # Reject image
     RejectImageView,
+
+    # Empty Chair Detection
+    CreateEmptyChairDetectionView,
+    EmptyChairDetectionUpdateView,
+    EmptyChairDetectionHistoryReportView,
+    EmptyChairDetectionReportChartView,
+    EmptyChairLiveCountView,
 )
 
 # Router setup for ViewSets
@@ -262,4 +269,12 @@ urlpatterns = [
 
     # Reject image
     path('reject-image/', RejectImageView.as_view()),
+
+    # === Empty Chair Detection ===
+    path('create-empty-chair-detection/', CreateEmptyChairDetectionView.as_view()),
+    path('create-empty-chair-detection/<int:pk>/', CreateEmptyChairDetectionView.as_view()),
+    path('update-empty-chair-detection/<int:pk>/', EmptyChairDetectionUpdateView.as_view()),
+    path('empty-chair-detection-report/', EmptyChairDetectionHistoryReportView.as_view()),
+    path('empty-chair-detection-chart/', EmptyChairDetectionReportChartView.as_view()),
+    path('empty-chair-live-count/', EmptyChairLiveCountView.as_view()),
 ]

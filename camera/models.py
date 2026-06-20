@@ -26,6 +26,7 @@ type_choices = [
     ("abnormalactivity", "abnormalactivity"),
     ("livestream", "livestream"),
     ("cleaners", "cleaners"),
+    ("chairdetection", "chairdetection"),
 ]
 
 
@@ -1243,3 +1244,75 @@ class CleanersPresenceHistory(models.Model):
 
     def __str__(self):
         return f"{self.person_class} - {self.camera.sn} ({self.start_time})"
+
+
+class EmptyChairDetectionReport(BaseModel):
+    camera = models.ForeignKey(
+        Camera,
+        on_delete=models.CASCADE,
+        null=False,
+        blank=False,
+        related_name="empty_chair_detection_histories",
+    )
+    empty_chair_count = models.IntegerField(default=0)
+    total_chair_count = models.IntegerField(default=0)
+    is_empty_detected = models.BooleanField(default=False)
+    annotator_status = models.CharField(max_length=20, null=True, blank=True)
+    is_annotated = models.BooleanField(default=False)
+    is_ai_annotated = models.BooleanField(default=False)
+    ai_annotation_time = models.DateTimeField(null=True, blank=True, default=None)
+    current_status = models.JSONField(null=True, blank=True)
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    is_rejected = models.BooleanField(default=False)
+    image = models.ImageField(
+        upload_to="empty_chair_detection_history/%Y/%m/%d/",
+        null=True,
+        blank=True,
+    )
+    annotator = models.ForeignKey(
+        "authentication.MyUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        related_name="empty_chair_detection_history",
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["camera", "is_annotated", "-created_at"],
+                name="chair_gal_idx",
+                condition=models.Q(is_rejected=False, image__isnull=False) & ~models.Q(image=""),
+            ),
+            models.Index(
+                fields=["is_annotated", "is_rejected", "created_at"],
+                name="chair_acc_idx",
+            ),
+            models.Index(
+                fields=["camera", "-start_time"],
+                name="chair_cam_start_idx",
+            ),
+        ]
+
+    @property
+    def ai_status(self):
+        return [str(self.empty_chair_count)]
+
+    def save(self, *args, **kwargs):
+        self.current_status = (
+            [self.annotator_status] if self.is_annotated else self.ai_status
+        )
+        if isinstance(self.current_status, list) and len(self.current_status) > 0:
+            try:
+                self.is_empty_detected = int(self.current_status[0]) > 0
+            except (ValueError, TypeError):
+                self.is_empty_detected = False
+        else:
+            self.is_empty_detected = False
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        company = self.camera.tent.company.name if self.camera.tent and self.camera.tent.company else "No Company"
+        return f"Empty Chair Detection for Camera {company} from {self.start_time} to {self.end_time}"

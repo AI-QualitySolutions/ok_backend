@@ -72,7 +72,7 @@ from camera.models import (
     AbnormalActivities, Camera, CounterHistory, KitchenImage,
     GuardPresenceHistory, CameraHeartbeat, KitchenViolationReport, AGGFViolationReport, SmokingViolationReport, FaceDetectionReport, GarbageMonitoringReport, RecycleMonitoringReport, FallDetectionMonitoringReport, ViolenceMonitoringReport, CrowdMonitoringReport,
     BathroomMonitoringHistory, SentimentAnalysis, CameraType, CameraStatus, WallClimbMonitoringReport, type_choices, BuffetViolationReport,
-    CleanersPresenceHistory
+    CleanersPresenceHistory, EmptyChairDetectionReport
 )
 from camera.serializers import (
     AbnormalActivitiesSerializer, CameraSerializer, KitchenImageSerializer,
@@ -83,7 +83,7 @@ from camera.serializers import (
     GarbageMonitoringReportSerializer, RecycleMonitoringReportSerializer, FallDetectionMonitoringReportSerializer, ViolenceMonitoringReportSerializer, CrowdMonitoringReportSerializer, BuffetViolationReportSerializer,
     SentimentAnalysisSerializer, BuffetCameraSerializer, CameraStatusSerializer,
     BathroomMonitoringHistorySerializer, CameraTypeSerializer, BuffetAiAnnotationSerializer, WallClimbMonitoringReportSerializer,
-    CleanersPresenceHistorySerializer
+    CleanersPresenceHistorySerializer, EmptyChairDetectionReportSerializer
 )
 
 from authentication.permissions import (BasePermission, BuffetPermission, CleanersPermission, CleannessPermission, RecyclePermission,
@@ -98,7 +98,8 @@ from utils.time import Current_saudi_time, convert_utc_to_riyadh, start_end_time
 from weight.utils import (
     match_people_count_key, match_guard_detection_key,
     match_garbage_detection_key, match_recycle_detection_key, match_kitchen_camera_key, match_aggf_camera_key, match_smoking_camera_key, match_face_detection_camera_key, match_garbage_monitoring_key,
-    match_buffet_violation_key, match_cleaners_detection_key, match_sentiment_analysis_key, match_camera_key
+    match_buffet_violation_key, match_cleaners_detection_key, match_sentiment_analysis_key, match_camera_key,
+    match_empty_chair_detection_key
 )
 
 from django.utils.timezone import make_aware, is_aware
@@ -8186,3 +8187,349 @@ class CleanersPresenceHistoryUpdateView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Empty Chair Detection
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CreateEmptyChairDetectionView(APIView):
+    """
+    POST  — AI camera pushes a new detection record.
+    GET   — Annotator queue: unannotated records (optionally by pk).
+    PUT   — AI system updates an existing record by pk.
+    """
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def get(self, request, pk=None):
+        if pk is not None:
+            record = get_object_or_404(EmptyChairDetectionReport, pk=pk)
+            serializer = EmptyChairDetectionReportSerializer(record)
+            return Response({
+                "success": True,
+                "message": "Empty Chair Detection record retrieved successfully.",
+                "data": serializer.data,
+            }, status=status.HTTP_200_OK)
+
+        page = request.query_params.get('page', 1)
+        page_size = request.query_params.get('page_size', 10)
+
+        qs = (
+            EmptyChairDetectionReport.objects
+            .filter(is_annotated=False, is_ai_annotated=False)
+            .select_related('camera__tent')
+            .order_by('-created_at')
+        )
+        paginated_qs, total_count, pagination_info = paginate_queryset(qs, page, page_size)
+        serializer = EmptyChairDetectionReportSerializer(paginated_qs, many=True)
+        return Response({
+            "success": True,
+            "message": "Empty Chair Detection records retrieved successfully.",
+            "pagination": pagination_info,
+            "data": serializer.data,
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request, *args, **kwargs):
+        header_key = request.headers.get('X-Secret-Key')
+        match_empty_chair_detection_key(header_key)
+
+        camera_sn = request.data.get('sn')
+        if not camera_sn:
+            return Response(
+                {"message": "Camera SN is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            camera = Camera.objects.get(sn=camera_sn)
+        except Camera.DoesNotExist:
+            return Response(
+                {"message": f"Camera with SN '{camera_sn}' does not exist."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        data = request.data.copy()
+        data['camera'] = camera.pk
+
+        serializer = EmptyChairDetectionReportSerializer(
+            data=data, context={'request': request}
+        )
+        if serializer.is_valid():
+            instance = serializer.save(camera=camera)
+            return Response({
+                "message": "Empty Chair Detection record created successfully.",
+                "data": EmptyChairDetectionReportSerializer(instance).data,
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "message": "Invalid data",
+            "errors": serializer.errors,
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, pk=None):
+        record = get_object_or_404(EmptyChairDetectionReport, pk=pk)
+        serializer = EmptyChairDetectionReportSerializer(
+            record, data=request.data, partial=True, context={'request': request}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "success": True,
+                "message": "Empty Chair Detection record updated successfully.",
+                "data": serializer.data,
+            }, status=status.HTTP_200_OK)
+        return Response({
+            "success": False,
+            "message": "Error updating record.",
+            "errors": serializer.errors,
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmptyChairDetectionUpdateView(APIView):
+    """PATCH — Annotator updates (annotate / reject) a single record."""
+
+    def patch(self, request, pk):
+        record = get_object_or_404(EmptyChairDetectionReport, pk=pk)
+        serializer = EmptyChairDetectionReportSerializer(
+            record, data=request.data, partial=True, context={'request': request}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmptyChairDetectionHistoryReportView(APIView):
+    """
+    GET — Dashboard history report with date + tent filters.
+    Query params:
+        start_date, end_date  (YYYY-MM-DD, required)
+        tent_id               (comma-separated ints, optional)
+        filter_param          empty | occupied | rejected | total
+        hour                  0-23 (optional)
+        paginate              true/false
+    """
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        user = request.user
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        tent_ids_text = request.query_params.get('tent_id')
+        filter_param = request.query_params.get('filter_param')
+        hour = request.query_params.get('hour')
+        paginate = request.query_params.get('paginate', '').lower() in ['true', '1', 'yes']
+
+        try:
+            start_date = parse_date(start_date_str) if start_date_str else None
+            end_date = parse_date(end_date_str) if end_date_str else None
+            if not start_date or not end_date:
+                raise ValueError("Both start_date and end_date are required.")
+            start_datetime = timezone.make_aware(
+                timezone.datetime.combine(start_date, timezone.datetime.min.time())
+            )
+            end_datetime = timezone.make_aware(
+                timezone.datetime.combine(end_date, timezone.datetime.max.time())
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if tent_ids_text:
+            try:
+                tent_ids = list(map(int, tent_ids_text.split(',')))
+                tents = Tent.objects.filter(id__in=tent_ids)
+                if not tents.exists():
+                    return Response({"detail": "No valid tents found."}, status=status.HTTP_404_NOT_FOUND)
+            except ValueError:
+                return Response({"detail": "Invalid tent ID format."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            if user.is_superuser:
+                tents = Tent.objects.all()
+            elif user.is_admin:
+                tents = Tent.objects.filter(company=user.company)
+            else:
+                tents = Tent.objects.filter(assigned_tent=user)
+
+        queryset = (
+            EmptyChairDetectionReport.objects
+            .filter(
+                Q(camera__tent__in=tents) &
+                Q(start_time__gte=start_datetime) &
+                Q(start_time__lte=end_datetime) &
+                Q(is_annotated=True)
+            )
+            .select_related('camera__tent')
+            .order_by('-start_time')
+        )
+
+        if filter_param == 'empty':
+            queryset = queryset.filter(is_empty_detected=True)
+        elif filter_param == 'occupied':
+            queryset = queryset.filter(is_empty_detected=False)
+        elif filter_param == 'rejected':
+            queryset = queryset.filter(is_rejected=True)
+
+        if hour is not None:
+            queryset = queryset.filter(start_time__hour=int(hour))
+
+        serializer = EmptyChairDetectionReportSerializer(
+            queryset, many=True, context={'request': request}
+        )
+
+        if paginate:
+            paginator = self.pagination_class()
+            paginated_data = paginator.paginate_queryset(serializer.data, request, view=self)
+            return paginator.get_paginated_response(paginated_data)
+
+        return Response({
+            'success': True,
+            'message': "Empty Chair Detection history retrieved successfully.",
+            'count': queryset.count(),
+            'results': serializer.data,
+        }, status=status.HTTP_200_OK)
+
+
+class EmptyChairDetectionReportChartView(APIView):
+    """
+    GET — Hourly aggregated chart data (avg empty chairs per hour).
+    Query params: start_date, end_date, tent_id (comma-separated, optional)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        tent_ids_text = request.query_params.get('tent_id')
+
+        try:
+            start_date = parse_date(start_date_str) if start_date_str else None
+            end_date = parse_date(end_date_str) if end_date_str else None
+            if not start_date or not end_date:
+                raise ValueError("Both start_date and end_date are required.")
+            start_datetime = timezone.make_aware(
+                timezone.datetime.combine(start_date, timezone.datetime.min.time())
+            )
+            end_datetime = timezone.make_aware(
+                timezone.datetime.combine(end_date, timezone.datetime.max.time())
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if tent_ids_text:
+            try:
+                tent_ids = list(map(int, tent_ids_text.split(',')))
+                tents = Tent.objects.filter(id__in=tent_ids)
+                if not tents.exists():
+                    return Response({"detail": "No valid tents found."}, status=status.HTTP_404_NOT_FOUND)
+            except ValueError:
+                return Response({"detail": "Invalid tent ID format."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            if user.is_superuser:
+                tents = Tent.objects.all()
+            elif user.is_admin:
+                tents = Tent.objects.filter(company=user.company)
+            else:
+                tents = Tent.objects.filter(assigned_tent=user)
+
+        queryset = (
+            EmptyChairDetectionReport.objects
+            .filter(
+                Q(camera__tent__in=tents) &
+                Q(start_time__gte=start_datetime) &
+                Q(start_time__lte=end_datetime) &
+                Q(is_annotated=True) &
+                Q(is_rejected=False)
+            )
+        )
+
+        total = queryset.count()
+        empty_detected = queryset.filter(is_empty_detected=True).count()
+        all_occupied = queryset.filter(is_empty_detected=False).count()
+        rejected = queryset.filter(is_rejected=True).count()
+
+        hourly_data = (
+            queryset
+            .annotate(hour=ExtractHour('start_time'))
+            .values('hour')
+            .annotate(
+                avg_empty=Avg('empty_chair_count'),
+                avg_total=Avg('total_chair_count'),
+                record_count=Count('id'),
+            )
+            .order_by('hour')
+        )
+
+        return Response({
+            'success': True,
+            'message': "Empty Chair Detection chart data retrieved successfully.",
+            'summary': {
+                'total': total,
+                'empty_detected': empty_detected,
+                'all_occupied': all_occupied,
+                'rejected': rejected,
+            },
+            'hourly': list(hourly_data),
+        }, status=status.HTTP_200_OK)
+
+
+class EmptyChairLiveCountView(APIView):
+    """
+    GET — Live current empty chair count per camera.
+    Returns the most recent record for each chairdetection camera.
+    No auth required so the dashboard can poll freely (add IsAuthenticated if needed).
+    """
+
+    def get(self, request):
+        latest_count_sq = (
+            EmptyChairDetectionReport.objects
+            .filter(camera=OuterRef('pk'))
+            .order_by('-start_time')
+            .values('empty_chair_count')[:1]
+        )
+        latest_total_sq = (
+            EmptyChairDetectionReport.objects
+            .filter(camera=OuterRef('pk'))
+            .order_by('-start_time')
+            .values('total_chair_count')[:1]
+        )
+        latest_time_sq = (
+            EmptyChairDetectionReport.objects
+            .filter(camera=OuterRef('pk'))
+            .order_by('-start_time')
+            .values('start_time')[:1]
+        )
+
+        cameras = (
+            Camera.objects
+            .filter(type='chairdetection')
+            .select_related('tent__company')
+            .annotate(
+                latest_empty_count=Subquery(latest_count_sq),
+                latest_total_count=Subquery(latest_total_sq),
+                latest_time=Subquery(latest_time_sq),
+            )
+            .order_by('tent__company__name', 'sn')
+        )
+
+        data = [
+            {
+                'camera_id': cam.id,
+                'camera_sn': cam.sn,
+                'tent_id': cam.tent_id,
+                'tent_name': cam.tent.name if cam.tent else None,
+                'company_name': cam.tent.company.name if cam.tent and cam.tent.company else None,
+                'empty_chair_count': cam.latest_empty_count or 0,
+                'total_chair_count': cam.latest_total_count or 0,
+                'last_seen': cam.latest_time,
+            }
+            for cam in cameras
+        ]
+
+        return Response({
+            'success': True,
+            'message': 'Live empty chair counts retrieved successfully.',
+            'total_cameras': len(data),
+            'data': data,
+        }, status=status.HTTP_200_OK)

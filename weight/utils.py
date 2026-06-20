@@ -85,3 +85,9 @@ def match_camera_key(provided_key):
     if settings.CAMERA_SECRET_KEY != provided_key:
         raise PermissionDenied("Invalid guard detection secret key.")
     return True
+
+
+def match_empty_chair_detection_key(provided_key):
+    if settings.EMPTY_CHAIR_DETECTION_KEY != provided_key:
+        raise PermissionDenied("Invalid empty chair detection secret key.")
+    return True
