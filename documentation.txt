@@ -1,0 +1,69 @@
+# Create fake data ----------------------------------------------------------------
+python manage.py create_user
+python manage.py create_tent
+python manage.py create_cameras
+python manage.py create_counterhistory
+python manage.py create_clean_indicator_history
+python manage.py create_guardpresencehistroy
+python manage.py create_cameraheartbeat
+python manage.py create_environmentsensor
+python manage.py create_environmentsensorrecord
+python manage.py create_tentairqualityrecord
+python manage.py create_tentwatertank
+python manage.py create_watertanksensorhistory
+
+
+makemigrations ----------------------------------------------------------------
+python manage.py makemigrations authentication tent camera sensor weight
+python manage.py migrate
+
+python run_collect_sensor_data.py
+venv\Scripts\activate
+
+
+source venv/Scripts/activate
+
+
+
+#install required modules
+pip freeze > requirements.txt
+pip install -r requirements.txt
+
+#for django
+python manage.py makemigrations
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver
+
+
+
+python manage.py create_user
+python manage.py insert_tent_data_from_json tent.json
+python manage.py insert_camera_data_from_json camera.json
+python manage.py insert_environmentsensor_data_from_json sensor.json
+python manage.py create_counterhistory   // date change
+python manage.py create_clean_indicator_history // date change
+python manage.py create_guardpresencehistroy
+python manage.py create_cameraheartbeat
+python manage.py create_environmentsensorrecord
+python manage.py create_tentwatertank
+python manage.py create_watertanksensorhistory
+python manage.py generate_fake_weight_conditions
+python manage.py generate_order_weight_data
+
+
+
+
+docker run --name postgres -e POSTGRES_USER=hajj -e POSTGRES_PASSWORD=zLQucPTRH9AlgS2 -e POSTGRES_DB=hajj -p 5432:5432 -d postgres
+
+
+celery -A hajjtent23DRF worker --loglevel=info
+
+or
+
+celery -A hajjtent23DRF worker --loglevel=info --pool=solo
+
+
+celery -A hajjtent23DRF beat --loglevel=info
+
+python manage.py generate_kitchen_images --total 1000000 --batch 1000

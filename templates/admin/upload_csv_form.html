@@ -1,0 +1,50 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+
+<h2 style="color: #333; margin-bottom: 20px;">Upload CSV</h2>
+
+<form method="post" enctype="multipart/form-data" 
+      style="display: flex; flex-direction: column; gap: 15px; max-width: 400px;">
+    {% csrf_token %}
+
+    <!-- Company Dropdown -->
+    <!-- <select id="company_id" name="company_id" required
+            style="
+                height: 40px; 
+                padding: 5px 10px; 
+                font-size: 16px; 
+                line-height: 1.5; 
+                border: 1px solid #ccc; 
+                border-radius: 4px; 
+                background-color: #fff; 
+                color: #333;
+            ">
+        <option value="" disabled selected>Select Company</option>
+        {% for company in company_list %}
+            <option value="{{ company.id }}">{{ company.name }}</option>
+        {% endfor %}
+    </select> -->
+
+    <!-- CSV File Input -->
+    <input type="file" name="csv_file" accept=".csv" required 
+           style="
+                padding: 10px; 
+                border: 1px solid #ccc; 
+                border-radius: 4px;
+           ">
+
+    <button type="submit" class="default"
+            style="
+                padding: 10px 20px; 
+                background-color: #007bff; 
+                color: white; 
+                border: none; 
+                border-radius: 4px; 
+                cursor: pointer; 
+                transition: background-color 0.2s;
+            ">
+        Upload
+    </button>
+</form>
+
+{% endblock %}
