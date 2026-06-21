@@ -7815,6 +7815,7 @@ MODEL_NAME_MAP = {
     'bathroom': BathroomMonitoringHistory,
     'sentiment': SentimentAnalysis,
     'cleaners': CleanersPresenceHistory,
+    'chairdetection': EmptyChairDetectionReport,
 }
 
 
