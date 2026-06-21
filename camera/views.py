@@ -240,6 +240,7 @@ class CameraTypesView(APIView):
             "is_climbmonitoring": "climbmonitoring",
             "is_abnormalactivity": "abnormalactivity",
             "is_livestream": "livestream",
+            "is_chairdetection": "chairdetection",
         }
 
         # Step 1: Gather all permissions from one or multiple companies
@@ -273,6 +274,8 @@ class CameraTypesView(APIView):
                     user_enabled_types.append("sentiment")
                 if user.is_buffet:
                     user_enabled_types.append("buffet")
+                if user.is_chairdetection:
+                    user_enabled_types.append("chairdetection")
 
         for company in companies:
             for perm in combined_permissions:

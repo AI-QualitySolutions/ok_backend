@@ -55,6 +55,7 @@ class PermissionModel(models.Model):
     is_can_delete_image = models.BooleanField(default=False)
     is_accesspoint = models.BooleanField(default=False)
     is_cleaners_presence = models.BooleanField(default=False)  # cleaners presence with person class
+    is_chairdetection = models.BooleanField(default=False)  # empty chair detection
 
     class Meta:
         abstract = True
