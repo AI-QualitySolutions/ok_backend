@@ -3032,6 +3032,8 @@ class GalleryByCameraView(APIView):
                     permission_list.append("sentiment")
                 if user.is_buffet:
                     permission_list.append("buffet")
+                if user.is_chairdetection:
+                    permission_list.append("chairdetection")
 
                 base_camera_query &= Q(tent__in=user.assigned_tent.all()) & Q(
                     type__in=permission_list)
@@ -3184,6 +3186,12 @@ class GalleryByCameraView(APIView):
             'cleaners': {
                 'model': CleanersPresenceHistory,
                 'serializer': CleanersPresenceHistorySerializer,
+                'filter': base_filter,
+                'sort_field': 'created_at',
+            },
+            'chairdetection': {
+                'model': EmptyChairDetectionReport,
+                'serializer': EmptyChairDetectionReportSerializer,
                 'filter': base_filter,
                 'sort_field': 'created_at',
             },
@@ -7458,9 +7466,11 @@ class GalleryByCameraViewForData(APIView):
             base_filter).exclude(image='').order_by('-created_at')
         counter_data = CounterHistory.objects.filter(
             base_filter).exclude(image='').order_by('-created_at')
+        chair_data = EmptyChairDetectionReport.objects.filter(
+            base_filter).exclude(image='').order_by('-created_at')
 
         all_data = list(chain(kitchen_data, guard_data, garbage_data, recycle_data,
-                        buffet_data, bathroom_data, counter_data))
+                        buffet_data, bathroom_data, counter_data, chair_data))
         # all_data_sorted = sorted(
         #     all_data, key=attrgetter('created_at'), reverse=True)
 
@@ -7490,6 +7500,8 @@ class GalleryByCameraViewForData(APIView):
                     BathroomMonitoringHistorySerializer(obj).data)
             elif isinstance(obj, CounterHistory):
                 serialized_data.append(CounterHistorySerializer(obj).data)
+            elif isinstance(obj, EmptyChairDetectionReport):
+                serialized_data.append(EmptyChairDetectionReportSerializer(obj).data)
 
         return paginator.get_paginated_response({
             "results": serialized_data
@@ -7550,6 +7562,7 @@ class AnnotatorRankingView(APIView):
             KitchenViolationReport, GuardPresenceHistory,
             BathroomMonitoringHistory, GarbageMonitoringReport,
             BuffetViolationReport, SentimentAnalysis,
+            EmptyChairDetectionReport,
         ]
         counts_by_user = defaultdict(int)
         for model in report_models:

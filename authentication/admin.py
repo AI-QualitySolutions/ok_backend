@@ -63,6 +63,7 @@ class MyUserAdmin(admin.ModelAdmin):
                 'is_can_delete_image',
                 'is_accesspoint',
                 'is_cleaners_presence',
+                'is_chairdetection',
             ),
         }),
     )
@@ -102,6 +103,7 @@ class MyUserAdmin(admin.ModelAdmin):
                 'is_can_delete_image',
                 'is_accesspoint',
                 'is_cleaners_presence',
+                'is_chairdetection',
             )
         }),
         ('Associations', {
