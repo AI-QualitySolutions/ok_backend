@@ -125,7 +125,7 @@ class CrowdMonitoringReportAdmin(admin.ModelAdmin):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "camera":
-            kwargs["queryset"] = Camera.objects.filter(type="crowd")
+            kwargs["queryset"] = Camera.objects.filter(type="crowdmonitoring")
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
     
 @admin.register(WallClimbMonitoringReport)
@@ -136,7 +136,7 @@ class WallClimbMonitoringReportAdmin(admin.ModelAdmin):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "camera":
-            kwargs["queryset"] = Camera.objects.filter(type="climb")
+            kwargs["queryset"] = Camera.objects.filter(type="climbmonitoring")
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
     
 @admin.register(AbnormalActivities)

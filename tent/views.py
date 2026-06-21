@@ -2430,7 +2430,7 @@ class DashboardClimbMonitoring(APIView):
             violation_count=Count(
                 'camera__wall_climb_monitoring_histories',
                 filter=Q(
-                    camera__type='climb',
+                    camera__type='climbmonitoring',
                     camera__wall_climb_monitoring_histories__created_at__range=(start_date_time, end_date_time),
                     camera__wall_climb_monitoring_histories__is_climb=True,
                     camera__wall_climb_monitoring_histories__is_annotated=True,
@@ -2438,7 +2438,7 @@ class DashboardClimbMonitoring(APIView):
                 )
             ),
             is_sensor_available=Exists(
-                Camera.objects.filter(tent=OuterRef('pk'), type='climb')
+                Camera.objects.filter(tent=OuterRef('pk'), type='climbmonitoring')
             )
         )
 
