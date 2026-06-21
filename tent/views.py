@@ -2333,7 +2333,7 @@ class DashboardCrowdMonitoring(APIView):
             violation_count=Count(
                 'camera__crowd_monitoring_histories',
                 filter=Q(
-                    camera__type='crowd',
+                    camera__type='crowdmonitoring',
                     camera__crowd_monitoring_histories__created_at__range=(start_date_time, end_date_time),
                     camera__crowd_monitoring_histories__is_crowd=True,
                     camera__crowd_monitoring_histories__is_annotated=True,
@@ -2341,7 +2341,7 @@ class DashboardCrowdMonitoring(APIView):
                 )
             ),
             is_sensor_available=Exists(
-                Camera.objects.filter(tent=OuterRef('pk'), type='crowd')
+                Camera.objects.filter(tent=OuterRef('pk'), type='crowdmonitoring')
             )
         )
 
