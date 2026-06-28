@@ -2075,6 +2075,95 @@ class DashboardRecycle(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class DashboardSecurity(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        is_arafa = request.GET.get("is_arafa", "false").lower() == "true"
+        nationality_param = request.GET.get("nationality", "all")
+        tent_list = request.GET.get("tent_list", None)
+        user = request.user
+        tents = Tent.objects.filter(is_arafa=is_arafa)
+
+        if nationality_param.lower() != "all":
+            try:
+                nationality_ids = [int(x) for x in nationality_param.split(
+                    ',') if x.strip().isdigit()]
+            except ValueError:
+                return Response({"detail": "Invalid nationality list."}, status=400)
+        else:
+            nationality_ids = []
+
+        if tent_list:
+            try:
+                tent_ids = [int(tid) for tid in tent_list.split(
+                    ',') if tid.strip().isdigit()]
+                tents = tents.filter(id__in=tent_ids)
+            except ValueError:
+                return Response({"detail": "Invalid tent_id list."}, status=400)
+        else:
+            if user.is_admin:
+                tents = tents.filter(company=user.company)
+            else:
+                assigned_ids = user.assigned_tent.values_list('id', flat=True)
+                tents = tents.filter(id__in=assigned_ids, company=user.company)
+
+            if nationality_ids:
+                tents = tents.filter(nationality__id__in=nationality_ids)
+
+        def get_aware_datetime_from_str(date_str):
+            if not date_str:
+                return None
+            dt = parse_datetime(date_str)
+            if dt is not None:
+                return make_aware(dt) if not is_aware(dt) else dt
+            return None
+
+        is_live = request.GET.get('is_live', 'false').lower() == 'true'
+
+        if is_live:
+            start_date_time, end_date_time = Current_saudi_time()
+        else:
+            start_date_time = get_aware_datetime_from_str(
+                request.GET.get('start_date_time')) or timezone.now()
+            end_date_time = get_aware_datetime_from_str(
+                request.GET.get('end_date_time')) or timezone.now()
+
+        tents = tents.annotate(
+            violation_count=Count(
+                'camera__security_monitoring_histories',
+                filter=Q(
+                    camera__type='security',
+                    camera__security_monitoring_histories__created_at__range=(start_date_time, end_date_time),
+                    camera__security_monitoring_histories__is_safe=False,
+                    camera__security_monitoring_histories__is_annotated=True,
+                    camera__security_monitoring_histories__is_rejected=False,
+                )
+            ),
+            is_sensor_available=Exists(
+                Camera.objects.filter(tent=OuterRef('pk'), type='security')
+            )
+        )
+
+        results = [
+            {
+                "tent_id": t['id'],
+                "tent_name": t['name'],
+                "violation_count": t['violation_count'],
+                "indicator": "red" if t['violation_count'] > 0 else "green",
+                "is_sensor_available": t['is_sensor_available'],
+            }
+            for t in tents.values('id', 'name', 'violation_count', 'is_sensor_available')
+        ]
+
+        results.sort(key=lambda x: tent_name_list_dict_sorting(x["tent_name"]))
+        return Response({
+            "success": True,
+            "message": "Dashboard Security Data",
+            "results": results
+        }, status=status.HTTP_200_OK)
+
+
 class DashboardFallDetection(APIView):
     permission_classes = [IsAuthenticated]
 
