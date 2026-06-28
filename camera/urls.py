@@ -292,7 +292,7 @@ urlpatterns = [
     # === Security Monitoring ===
     path('create-security-monitoring/', CreateSecurityMonitoringHistory.as_view()),
     path('create-security-monitoring/<int:pk>/', CreateSecurityMonitoringHistory.as_view()),
-    path('update-security-monitoring/<int:pk>/', SecurityMonitoringReportUpdateView.as_view()),
+    path('update-security-violation/<int:pk>/', SecurityMonitoringReportUpdateView.as_view()),
     path('security-monitoring-history/', SecurityMonitoringHistoryReportView.as_view()),
     path('security-indicator-report/', SecurityIndicatorHistoryReportView.as_view()),
     path('security-monitoring-report/', SecurityMonitoringReportView.as_view()),
