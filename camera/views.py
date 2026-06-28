@@ -2835,6 +2835,8 @@ class CameraByTentView(APIView):
             "is_crowdmonitoring": "crowdmonitoring",
             "is_climbmonitoring": "climbmonitoring",
             "is_abnormalactivity": "abnormalactivity",
+            "is_chairdetection": "chairdetection",
+            "is_security": "security",
         }
 
         # Get allowed camera types based on company permissions
