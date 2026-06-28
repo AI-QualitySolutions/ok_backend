@@ -19,7 +19,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 from django.db.models import (
-    Sum, IntegerField, Max, Min, Avg, Q, F, ExpressionWrapper, DurationField, Prefetch, Exists, OuterRef, Count
+    Sum, IntegerField, Max, Min, Avg, Q, F, ExpressionWrapper, DurationField, Prefetch, Exists, OuterRef, Count, Subquery
 )
 from django.db.models.functions import TruncMonth, TruncHour, TruncDay, TruncDate, Coalesce
 
@@ -44,7 +44,7 @@ from tent.serializers import (
 )
 from tent.utils import generate_csv_response, CustomPagination
 
-from camera.models import AbnormalActivities, Camera, CounterHistory, CrowdMonitoringReport, SentimentAnalysis, KitchenViolationReport, GarbageMonitoringReport, RecycleMonitoringReport, FallDetectionMonitoringReport, ViolenceMonitoringReport, GuardPresenceHistory, BuffetViolationReport, BathroomMonitoringHistory, WallClimbMonitoringReport
+from camera.models import AbnormalActivities, Camera, CounterHistory, CrowdMonitoringReport, SentimentAnalysis, KitchenViolationReport, GarbageMonitoringReport, RecycleMonitoringReport, FallDetectionMonitoringReport, ViolenceMonitoringReport, GuardPresenceHistory, BuffetViolationReport, BathroomMonitoringHistory, WallClimbMonitoringReport, EmptyChairDetectionReport
 from camera.views import smart_aggregate
 from camera.serializers import CameraSerializer
 
@@ -2361,6 +2361,80 @@ class DashboardCrowdMonitoring(APIView):
         return Response({
             "success": True,
             "message": "Dashboard Crowd Monitoring Data",
+            "results": results
+        }, status=status.HTTP_200_OK)
+
+
+class DashboardChairDetection(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        is_arafa = request.GET.get("is_arafa", "false").lower() == "true"
+        tent_list = request.GET.get("tent_list", None)
+        user = request.user
+
+        tents = Tent.objects.filter(is_arafa=is_arafa)
+
+        if tent_list:
+            try:
+                tent_ids = [int(tid) for tid in tent_list.split(',') if tid.strip().isdigit()]
+                tents = tents.filter(id__in=tent_ids)
+            except ValueError:
+                return Response({"detail": "Invalid tent_id list."}, status=400)
+        else:
+            if user.is_admin:
+                tents = tents.filter(company=user.company)
+            else:
+                assigned_ids = user.assigned_tent.values_list('id', flat=True)
+                tents = tents.filter(id__in=assigned_ids, company=user.company)
+
+        tents = tents.annotate(
+            is_sensor_available=Exists(
+                Camera.objects.filter(tent=OuterRef('pk'), type='chairdetection')
+            )
+        )
+
+        tent_ids_list = list(tents.values_list('id', flat=True))
+
+        latest_empty_sq = EmptyChairDetectionReport.objects.filter(
+            camera=OuterRef('pk')
+        ).order_by('-start_time').values('empty_chair_count')[:1]
+
+        latest_total_sq = EmptyChairDetectionReport.objects.filter(
+            camera=OuterRef('pk')
+        ).order_by('-start_time').values('total_chair_count')[:1]
+
+        cam_qs = Camera.objects.filter(
+            tent_id__in=tent_ids_list, type='chairdetection'
+        ).annotate(
+            lat_empty=Coalesce(Subquery(latest_empty_sq, output_field=IntegerField()), 0),
+            lat_total=Coalesce(Subquery(latest_total_sq, output_field=IntegerField()), 0),
+        ).values('tent_id', 'lat_empty', 'lat_total')
+
+        chairs_per_tent = {}
+        for cam in cam_qs:
+            t_id = cam['tent_id']
+            if t_id not in chairs_per_tent:
+                chairs_per_tent[t_id] = {'empty': 0, 'total': 0}
+            chairs_per_tent[t_id]['empty'] += cam['lat_empty']
+            chairs_per_tent[t_id]['total'] += cam['lat_total']
+
+        results = []
+        for t in tents.values('id', 'name', 'is_sensor_available'):
+            chair_data = chairs_per_tent.get(t['id'], {'empty': 0, 'total': 0})
+            results.append({
+                "tent_id": t['id'],
+                "tent_name": t['name'],
+                "empty_chair_count": chair_data['empty'],
+                "total_chair_count": chair_data['total'],
+                "is_sensor_available": t['is_sensor_available'],
+            })
+
+        results.sort(key=lambda x: tent_name_list_dict_sorting(x["tent_name"]))
+
+        return Response({
+            "success": True,
+            "message": "Dashboard Chair Detection Data",
             "results": results
         }, status=status.HTTP_200_OK)
 

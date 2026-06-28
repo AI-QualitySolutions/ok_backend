@@ -4,7 +4,7 @@ from camera.models import (AbnormalActivities, Camera, CrowdMonitoringReport,
                            GuardPresenceHistory, CounterHistory,
                            CameraHeartbeat,  KitchenImage, KitchenViolationReport,
                            GarbageMonitoringReport, RecycleMonitoringReport, BuffetViolationReport, BathroomMonitoringHistory, SentimentAnalysis, CameraStatus, CameraType, FallDetectionMonitoringReport, ViolenceMonitoringReport, WallClimbMonitoringReport,
-                           CleanersPresenceHistory, EmptyChairDetectionReport)
+                           CleanersPresenceHistory, EmptyChairDetectionReport, SecurityMonitoringReport)
 
 from .people_count_admin import *
 # Register your models here
@@ -211,4 +211,16 @@ class EmptyChairDetectionReportAdmin(admin.ModelAdmin):
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "camera":
             kwargs["queryset"] = Camera.objects.filter(type="chairdetection")
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+@admin.register(SecurityMonitoringReport)
+class SecurityMonitoringReportAdmin(admin.ModelAdmin):
+    search_fields = ['id', 'camera__id', 'camera__sn']
+    list_display = ['id', 'camera', 'is_safe', 'violation_list', 'start_time', 'end_time', 'created_at']
+    list_filter = ['created_at', 'is_safe', 'is_annotated', 'is_rejected', 'camera__tent__company__name']
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "camera":
+            kwargs["queryset"] = Camera.objects.filter(type="security")
         return super().formfield_for_foreignkey(db_field, request, **kwargs)

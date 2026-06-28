@@ -72,7 +72,7 @@ from camera.models import (
     AbnormalActivities, Camera, CounterHistory, KitchenImage,
     GuardPresenceHistory, CameraHeartbeat, KitchenViolationReport, AGGFViolationReport, SmokingViolationReport, FaceDetectionReport, GarbageMonitoringReport, RecycleMonitoringReport, FallDetectionMonitoringReport, ViolenceMonitoringReport, CrowdMonitoringReport,
     BathroomMonitoringHistory, SentimentAnalysis, CameraType, CameraStatus, WallClimbMonitoringReport, type_choices, BuffetViolationReport,
-    CleanersPresenceHistory, EmptyChairDetectionReport
+    CleanersPresenceHistory, EmptyChairDetectionReport, SecurityMonitoringReport
 )
 from camera.serializers import (
     AbnormalActivitiesSerializer, CameraSerializer, KitchenImageSerializer,
@@ -83,12 +83,14 @@ from camera.serializers import (
     GarbageMonitoringReportSerializer, RecycleMonitoringReportSerializer, FallDetectionMonitoringReportSerializer, ViolenceMonitoringReportSerializer, CrowdMonitoringReportSerializer, BuffetViolationReportSerializer,
     SentimentAnalysisSerializer, BuffetCameraSerializer, CameraStatusSerializer,
     BathroomMonitoringHistorySerializer, CameraTypeSerializer, BuffetAiAnnotationSerializer, WallClimbMonitoringReportSerializer,
-    CleanersPresenceHistorySerializer, EmptyChairDetectionReportSerializer
+    CleanersPresenceHistorySerializer, EmptyChairDetectionReportSerializer,
+    SecurityMonitoringReportSerializer
 )
 
 from authentication.permissions import (BasePermission, BuffetPermission, CleanersPermission, CleannessPermission, RecyclePermission,
                                         FoodWeightPermission, GuardPermission, KitchenPermission, PeopleCountPermission, SentimentPermission,
-                                        TemperaturePermission, WaterTankPermission, CanDeleteImagePermission, CleanersPresencePermission
+                                        TemperaturePermission, WaterTankPermission, CanDeleteImagePermission, CleanersPresencePermission,
+                                        SecurityPermission
                                         )
 
 from utils.pagination import custom_array_pagination, paginate_queryset, CustomPageNumberPagination
@@ -99,7 +101,7 @@ from weight.utils import (
     match_people_count_key, match_guard_detection_key,
     match_garbage_detection_key, match_recycle_detection_key, match_kitchen_camera_key, match_aggf_camera_key, match_smoking_camera_key, match_face_detection_camera_key, match_garbage_monitoring_key,
     match_buffet_violation_key, match_cleaners_detection_key, match_sentiment_analysis_key, match_camera_key,
-    match_empty_chair_detection_key
+    match_empty_chair_detection_key, match_security_detection_key
 )
 
 from django.utils.timezone import make_aware, is_aware
@@ -241,6 +243,7 @@ class CameraTypesView(APIView):
             "is_abnormalactivity": "abnormalactivity",
             "is_livestream": "livestream",
             "is_chairdetection": "chairdetection",
+            "is_security": "security",
         }
 
         # Step 1: Gather all permissions from one or multiple companies
@@ -276,6 +279,8 @@ class CameraTypesView(APIView):
                     user_enabled_types.append("buffet")
                 if user.is_chairdetection:
                     user_enabled_types.append("chairdetection")
+                if user.is_security:
+                    user_enabled_types.append("security")
 
         for company in companies:
             for perm in combined_permissions:
@@ -731,6 +736,17 @@ class RecycleMonitoringReportUpdateView(APIView):
         recycle_monitoring = get_object_or_404(RecycleMonitoringReport, pk=pk)
         serializer = RecycleMonitoringReportSerializer(
             recycle_monitoring, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SecurityMonitoringReportUpdateView(APIView):
+    def patch(self, request, pk):
+        security_monitoring = get_object_or_404(SecurityMonitoringReport, pk=pk)
+        serializer = SecurityMonitoringReportSerializer(
+            security_monitoring, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -3034,6 +3050,8 @@ class GalleryByCameraView(APIView):
                     permission_list.append("buffet")
                 if user.is_chairdetection:
                     permission_list.append("chairdetection")
+                if user.is_security:
+                    permission_list.append("security")
 
                 base_camera_query &= Q(tent__in=user.assigned_tent.all()) & Q(
                     type__in=permission_list)
@@ -3192,6 +3210,12 @@ class GalleryByCameraView(APIView):
             'chairdetection': {
                 'model': EmptyChairDetectionReport,
                 'serializer': EmptyChairDetectionReportSerializer,
+                'filter': base_filter,
+                'sort_field': 'created_at',
+            },
+            'security': {
+                'model': SecurityMonitoringReport,
+                'serializer': SecurityMonitoringReportSerializer,
                 'filter': base_filter,
                 'sort_field': 'created_at',
             },
@@ -7468,9 +7492,11 @@ class GalleryByCameraViewForData(APIView):
             base_filter).exclude(image='').order_by('-created_at')
         chair_data = EmptyChairDetectionReport.objects.filter(
             base_filter).exclude(image='').order_by('-created_at')
+        security_data = SecurityMonitoringReport.objects.filter(
+            base_filter).exclude(image='').order_by('-created_at')
 
         all_data = list(chain(kitchen_data, guard_data, garbage_data, recycle_data,
-                        buffet_data, bathroom_data, counter_data, chair_data))
+                        buffet_data, bathroom_data, counter_data, chair_data, security_data))
         # all_data_sorted = sorted(
         #     all_data, key=attrgetter('created_at'), reverse=True)
 
@@ -7502,6 +7528,8 @@ class GalleryByCameraViewForData(APIView):
                 serialized_data.append(CounterHistorySerializer(obj).data)
             elif isinstance(obj, EmptyChairDetectionReport):
                 serialized_data.append(EmptyChairDetectionReportSerializer(obj).data)
+            elif isinstance(obj, SecurityMonitoringReport):
+                serialized_data.append(SecurityMonitoringReportSerializer(obj).data)
 
         return paginator.get_paginated_response({
             "results": serialized_data
@@ -7562,7 +7590,7 @@ class AnnotatorRankingView(APIView):
             KitchenViolationReport, GuardPresenceHistory,
             BathroomMonitoringHistory, GarbageMonitoringReport,
             BuffetViolationReport, SentimentAnalysis,
-            EmptyChairDetectionReport,
+            EmptyChairDetectionReport, SecurityMonitoringReport,
         ]
         counts_by_user = defaultdict(int)
         for model in report_models:
@@ -7816,6 +7844,7 @@ MODEL_NAME_MAP = {
     'sentiment': SentimentAnalysis,
     'cleaners': CleanersPresenceHistory,
     'chairdetection': EmptyChairDetectionReport,
+    'security': SecurityMonitoringReport,
 }
 
 
@@ -8550,3 +8579,658 @@ class EmptyChairLiveCountView(APIView):
             'total_cameras': len(data),
             'data': data,
         }, status=status.HTTP_200_OK)
+
+
+# === Security Monitoring Views ===
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CreateSecurityMonitoringHistory(APIView):
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    AVAILABLE_CLASSES = ['fire', 'luggage', 'carry_car', 'fighting', 'falling', 'sleeping', 'security_man']
+
+    def get(self, request, pk=None):
+        if pk is not None:
+            security_monitoring = SecurityMonitoringReport.objects.get(pk=pk)
+            serializer = SecurityMonitoringReportSerializer(security_monitoring)
+            return Response({
+                "success": True,
+                "message": "Security Monitoring Report retrieved successfully.",
+                "available_classes": self.AVAILABLE_CLASSES,
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        security_monitorings = SecurityMonitoringReport.objects.filter(
+            is_annotated=False, is_ai_annotated=False)
+        serializer = SecurityMonitoringReportSerializer(security_monitorings, many=True)
+        return Response({
+            "success": True,
+            "message": "Security Monitoring Reports retrieved successfully.",
+            "available_classes": self.AVAILABLE_CLASSES,
+            "summary": {
+                "total_pending": security_monitorings.count(),
+                "unsafe_detected": security_monitorings.filter(is_safe=False).count(),
+                "safe_detected": security_monitorings.filter(is_safe=True).count(),
+            },
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def put(self, request, pk=None):
+        security_monitoring = SecurityMonitoringReport.objects.get(pk=pk)
+        serializer = SecurityMonitoringReportSerializer(
+            security_monitoring, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "success": True,
+                "message": "Security Monitoring Report updated successfully.",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        return Response({
+            "success": False,
+            "message": "Error updating Security Monitoring Report.",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def post(self, request, *args, **kwargs):
+        header_key = request.headers.get('X-Secret-Key')
+        match_security_detection_key(header_key)
+
+        camera_sn = request.data.get('sn')
+        if not camera_sn:
+            return Response(
+                {"message": "Camera SN is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            camera = Camera.objects.get(sn=camera_sn)
+        except Camera.DoesNotExist:
+            return Response(
+                {"message": f"Camera with SN '{camera_sn}' does not exist."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        data = request.data.copy()
+        data['camera'] = camera.pk
+
+        serializer = SecurityMonitoringReportSerializer(
+            data=data, context={'request': request})
+
+        if serializer.is_valid():
+            security_monitoring = serializer.save(camera=camera)
+            return Response(
+                {
+                    "message": "Security Monitoring History created successfully.",
+                    "data": SecurityMonitoringReportSerializer(security_monitoring).data,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(
+            {"message": "Invalid data", "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class SecurityMonitoringHistoryReportView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        response_type = request.GET.get('type', 'json')
+        is_safe = request.GET.get('is_safe', None)
+        start_date_str = request.GET.get('start_date', None)
+        end_date_str = request.GET.get('end_date', None)
+        tent_id_list = request.GET.get('tent_id', None)
+        paginate = request.GET.get('paginate', 'true').lower() == 'true'
+
+        if tent_id_list:
+            try:
+                tent_ids = list(map(int, tent_id_list.split(',')))
+                tents = Tent.objects.filter(id__in=tent_ids)
+            except ValueError:
+                return Response({"detail": "Invalid tent_id list."}, status=400)
+        else:
+            if user.is_admin:
+                tents = Tent.objects.filter(company=request.user.company).order_by('id')
+            else:
+                assigned_tent_ids = user.assigned_tent.values_list('id', flat=True)
+                tents = Tent.objects.filter(
+                    id__in=assigned_tent_ids, company=request.user.company).order_by('id')
+            if not tents.exists():
+                return Response({"detail": "No tents found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not tents.exists():
+            return Response({"detail": "No tents found."}, status=404)
+
+        try:
+            start_date = parse_date(start_date_str) if start_date_str else None
+            end_date = parse_date(end_date_str) if end_date_str else None
+            if not start_date or not end_date:
+                return Response({"error": "Start and end dates are required."}, status=400)
+
+            start_datetime = timezone.make_aware(
+                timezone.datetime.combine(start_date, timezone.datetime.min.time()))
+            end_datetime = timezone.make_aware(
+                timezone.datetime.combine(end_date, timezone.datetime.min.time())) + timedelta(days=1)
+        except Exception as e:
+            return Response({"error": f"Invalid dates: {str(e)}"}, status=400)
+
+        queryset = SecurityMonitoringReport.objects.filter(
+            camera__tent__in=tents,
+            created_at__gte=start_datetime,
+            created_at__lte=end_datetime,
+            is_annotated=False
+        )
+
+        if is_safe is not None:
+            is_safe_bool = is_safe.lower() == 'true'
+            queryset = queryset.filter(is_safe=is_safe_bool)
+
+        queryset = queryset.order_by('-created_at').values(
+            'camera__tent__name',
+            'created_at',
+            'camera__sn',
+            'is_safe',
+            'image',
+        )
+
+        data = []
+        for record in queryset:
+            image_url = f"{settings.MEDIA_URL}{record['image']}" if record['image'] else None
+            image_full_url = f"{settings.BASE_URL}{image_url}" if image_url and settings.DEBUG else image_url
+
+            data.append({
+                'tent_name': record['camera__tent__name'],
+                'created_at': record['created_at'].strftime('%Y-%m-%d %H:%M'),
+                'camera_sn': record['camera__sn'],
+                'is_safe': record['is_safe'],
+                'image': image_full_url,
+            })
+
+        if response_type == "csv":
+            return generate_csv_response(data, 'security_report_data.csv')
+
+        if paginate:
+            paginator = self.pagination_class()
+            paginated_data = paginator.paginate_queryset(data, request, view=self)
+            return paginator.get_paginated_response(paginated_data)
+
+        return Response({
+            'success': True,
+            'message': "Security Monitoring Data Retrieved",
+            'results': data,
+        }, status=status.HTTP_200_OK)
+
+
+class SecurityIndicatorHistoryReportView(APIView):
+    permission_classes = [SecurityPermission]
+    pagination_class = CustomPagination
+
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        response_type = request.GET.get('type', 'json')
+        is_safe = request.GET.get('violation', None)
+        start_date_str = request.GET.get('start_date', None)
+        end_date_str = request.GET.get('end_date', None)
+        tent_id_list = request.GET.get('tent_id', None)
+        paginate = request.GET.get('paginate', 'true').lower() == 'true'
+
+        if tent_id_list:
+            try:
+                tent_ids = list(map(int, tent_id_list.split(',')))
+                tents = Tent.objects.filter(id__in=tent_ids)
+            except ValueError:
+                return Response({"detail": "Invalid tent_id list."}, status=400)
+        else:
+            if user.is_admin:
+                tents = Tent.objects.filter(
+                    company=request.user.company).order_by('id')
+            else:
+                assigned_tent_ids = user.assigned_tent.values_list('id', flat=True)
+                tents = Tent.objects.filter(
+                    id__in=assigned_tent_ids, company=request.user.company).order_by('id')
+            if not tents.exists():
+                return Response({"detail": "No tents found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not tents.exists():
+            return Response({"detail": "No tents found."}, status=404)
+
+        try:
+            start_date = parse_date(start_date_str) if start_date_str else None
+            end_date = parse_date(end_date_str) if end_date_str else None
+            if not start_date or not end_date:
+                return Response({"error": "Start and end dates are required."}, status=400)
+
+            start_datetime = timezone.make_aware(
+                timezone.datetime.combine(start_date, timezone.datetime.min.time()))
+            end_datetime = timezone.make_aware(
+                timezone.datetime.combine(end_date, timezone.datetime.min.time())) + timedelta(days=1)
+        except Exception as e:
+            return Response({"error": f"Invalid dates: {str(e)}"}, status=400)
+
+        queryset = SecurityMonitoringReport.objects.filter(
+            camera__tent__in=tents,
+            created_at__gte=start_datetime,
+            created_at__lte=end_datetime,
+            is_rejected=False,
+            is_annotated=True
+        ).order_by('-created_at')
+
+        if is_safe is not None:
+            is_safe_bool = is_safe.lower() == 'true'
+            queryset = queryset.filter(is_safe=is_safe_bool)
+
+        queryset = queryset.order_by('-created_at').values(
+            'camera__tent__name',
+            'created_at',
+            'camera__sn',
+            'is_safe',
+            'image',
+        )
+
+        data = []
+        for record in queryset:
+            image_url = f"{settings.MEDIA_URL}{record['image']}" if record['image'] else None
+            image_full_url = f"{settings.BASE_URL}{image_url}" if image_url and settings.DEBUG else image_url
+
+            data.append({
+                'tent_name': record['camera__tent__name'],
+                'created_at': record['created_at'],
+                'camera_sn': record['camera__sn'],
+                'is_safe': record['is_safe'],
+                'image': image_full_url,
+            })
+
+        if response_type == "csv":
+            return generate_csv_response(data, 'security_indicator_data.csv')
+
+        if paginate:
+            paginator = self.pagination_class()
+            paginated_data = paginator.paginate_queryset(data, request, view=self)
+            return paginator.get_paginated_response(paginated_data)
+
+        return Response({
+            'success': True,
+            'message': "Security Indicator Data Retrieved",
+            'results': data,
+        }, status=status.HTTP_200_OK)
+
+
+class SecurityMonitoringReportChartView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        user = request.user
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        tent_ids_text = request.query_params.get('tent_id')
+
+        try:
+            start_date = parse_date(start_date_str) if start_date_str else None
+            end_date = parse_date(end_date_str) if end_date_str else None
+            if not start_date or not end_date:
+                raise ValueError("Both start_date and end_date are required.")
+
+            start_datetime = timezone.make_aware(
+                timezone.datetime.combine(start_date, timezone.datetime.min.time())
+            )
+            end_datetime = timezone.make_aware(
+                timezone.datetime.combine(end_date, timezone.datetime.max.time())
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if tent_ids_text:
+            try:
+                tent_ids = list(map(int, tent_ids_text.split(',')))
+                tents = Tent.objects.filter(id__in=tent_ids)
+                if not tents.exists():
+                    return Response({"detail": "No valid tents found."}, status=status.HTTP_404_NOT_FOUND)
+            except ValueError:
+                return Response({"detail": "Invalid tent ID format."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            if user.is_superuser:
+                tents = Tent.objects.all()
+            elif user.is_admin:
+                tents = Tent.objects.filter(company=user.company)
+            elif user.is_staff:
+                tents = Tent.objects.filter(assigned_tent=user)
+
+        queryset = SecurityMonitoringReport.objects.filter(
+            Q(camera__tent__in=tents) &
+            Q(start_time__gte=start_datetime) &
+            Q(start_time__lte=end_datetime) &
+            Q(is_annotated=True)
+        ).select_related('camera__tent')
+
+        total = queryset.count()
+        unsafe = queryset.filter(is_safe=False).count()
+        safe = queryset.filter(is_safe=True).count()
+        rejected = queryset.filter(is_rejected=True).count()
+
+        hourly_qs = (
+            queryset
+            .values('start_time__hour', 'is_safe')
+            .annotate(count=Count('id'))
+            .order_by('start_time__hour')
+        )
+
+        hourly_map = {}
+        for row in hourly_qs:
+            hour = str(row['start_time__hour']).zfill(2)
+            if hour not in hourly_map:
+                hourly_map[hour] = {'hour': hour, 'unsafe': 0, 'safe': 0}
+            key = 'safe' if row['is_safe'] else 'unsafe'
+            hourly_map[hour][key] = row['count']
+
+        hourly = sorted(hourly_map.values(), key=lambda x: x['hour'])
+
+        return Response({
+            'stats': {
+                'total': total,
+                'unsafe': unsafe,
+                'safe': safe,
+                'rejected': rejected,
+            },
+            'hourly': hourly,
+        }, status=status.HTTP_200_OK)
+
+
+class SecurityMonitoringReportView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request, format=None):
+        user = request.user
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        tent_ids_text = request.query_params.get('tent_id')
+        filter_param = request.query_params.get('filter_param')
+        hour = request.query_params.get('hour')
+        paginate_param = request.query_params.get('paginate', '').lower()
+        paginate = paginate_param in ['true', '1', 'yes']
+
+        try:
+            start_date = parse_date(start_date_str) if start_date_str else None
+            end_date = parse_date(end_date_str) if end_date_str else None
+            if not start_date or not end_date:
+                raise ValueError("Both start_date and end_date are required.")
+
+            start_datetime = timezone.make_aware(
+                timezone.datetime.combine(start_date, timezone.datetime.min.time())
+            )
+            end_datetime = timezone.make_aware(
+                timezone.datetime.combine(end_date, timezone.datetime.max.time())
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if tent_ids_text:
+            try:
+                tent_ids = list(map(int, tent_ids_text.split(',')))
+                tents = Tent.objects.filter(id__in=tent_ids)
+                if not tents.exists():
+                    return Response({"detail": "No valid tents found."}, status=status.HTTP_404_NOT_FOUND)
+            except ValueError:
+                return Response({"detail": "Invalid tent ID format."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            if user.is_superuser:
+                tents = Tent.objects.all()
+            elif user.is_admin:
+                tents = Tent.objects.filter(company=user.company)
+            elif user.is_staff:
+                tents = Tent.objects.filter(assigned_tent=user)
+
+        queryset = SecurityMonitoringReport.objects.filter(
+            Q(camera__tent__in=tents) &
+            Q(start_time__gte=start_datetime) &
+            Q(start_time__lte=end_datetime) &
+            Q(is_annotated=True)
+        ).order_by('-start_time').select_related('camera__tent')
+
+        if filter_param == 'unsafe':
+            queryset = queryset.filter(is_safe=False)
+        elif filter_param == 'safe':
+            queryset = queryset.filter(is_safe=True)
+        elif filter_param == 'rejected':
+            queryset = queryset.filter(is_rejected=True)
+
+        if hour is not None:
+            queryset = queryset.filter(start_time__hour=int(hour))
+
+        serializer = SecurityMonitoringReportSerializer(
+            queryset, many=True, context={'request': request}
+        )
+
+        if paginate:
+            paginator = self.pagination_class()
+            paginated_data = paginator.paginate_queryset(
+                serializer.data, request, view=self
+            )
+            return paginator.get_paginated_response(paginated_data)
+
+        return Response({
+            'success': True,
+            'message': "Security Monitoring History Data Retrieved Successfully",
+            'count': queryset.count(),
+            'results': serializer.data,
+        }, status=status.HTTP_200_OK)
+
+
+class TentSecuritySummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        response_type = request.query_params.get('type', 'json')
+
+        start = parse_datetime(start_date) if start_date else None
+        end = parse_datetime(end_date) if end_date else None
+
+        if not start or not end:
+            return Response({"error": "start_date and end_date are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if is_naive(start):
+            start = make_aware(start)
+        if is_naive(end):
+            end = make_aware(end)
+
+        end = end + timedelta(days=1)
+
+        date_filter = Q(camera__security_monitoring_histories__start_time__gte=start,
+                        camera__security_monitoring_histories__start_time__lt=end)
+
+        company = request.user.company
+        if request.user.is_admin:
+            tents = Tent.objects.filter(company=company)
+        else:
+            tents = request.user.assigned_tent.filter(company=company)
+
+        security_camera_exists = Camera.objects.filter(
+            tent=OuterRef('pk'),
+            type='security'
+        )
+
+        tents = tents.annotate(
+            security_camera_exists=Exists(security_camera_exists)
+        ).filter(security_camera_exists=True)
+
+        tents = tents.annotate(
+            violation_count=Count(
+                'camera__security_monitoring_histories',
+                filter=Q(
+                    camera__security_monitoring_histories__is_safe=False,
+                    camera__security_monitoring_histories__is_annotated=True) & date_filter
+            )
+        ).order_by('violation_count')
+
+        tents = list(tents)
+        tents = sorted(
+            tents,
+            key=lambda x: (x.violation_count, tent_name_list_dict_sorting(x.name))
+        )
+
+        tent_data = []
+        for index, tent in enumerate(tents, start=1):
+            tent_data.append({
+                "tent_id": tent.id,
+                'tent_name': tent.name,
+                'violation_count': tent.violation_count,
+                "rank": index
+            })
+
+        if response_type == 'csv':
+            return generate_csv_response(tent_data, 'security_violation_ranking_data.csv')
+
+        return Response({
+            "success": True,
+            "message": "Tent-wise Security summary retrieved successfully.",
+            "data": tent_data
+        }, status=status.HTTP_200_OK)
+
+
+class CameraSecuritySummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        start = parse_datetime(start_date) if start_date else None
+        end = parse_datetime(end_date) if end_date else None
+
+        if not start or not end:
+            return Response({"error": "start_date and end_date are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if is_naive(start):
+            start = make_aware(start)
+        if is_naive(end):
+            end = make_aware(end)
+
+        end = end + timedelta(days=1)
+
+        date_filter = Q(security_monitoring_histories__start_time__gte=start,
+                        security_monitoring_histories__start_time__lt=end)
+
+        company = request.user.company
+        if request.user.is_admin:
+            tents = Tent.objects.filter(company=company)
+        else:
+            tents = request.user.assigned_tent.filter(company=company)
+
+        cameras = Camera.objects.filter(tent__in=tents, type='security').annotate(
+            violation_count=Count(
+                'security_monitoring_histories',
+                filter=Q(
+                    security_monitoring_histories__is_safe=False,
+                    security_monitoring_histories__is_annotated=True) & date_filter
+            )
+        ).select_related('tent').order_by('violation_count')
+
+        camera_data = []
+        rank = 1
+        previous_violation = None
+        for cam in cameras:
+            current_violation = cam.violation_count
+            if previous_violation is None:
+                previous_violation = current_violation
+            elif current_violation != previous_violation:
+                rank += 1
+                previous_violation = current_violation
+            camera_data.append({
+                'id': cam.id,
+                'camera': cam.sn,
+                'tent_name': cam.tent.name if cam.tent else None,
+                "tent_id": cam.tent.id if cam.tent else None,
+                'violation_count': current_violation,
+                'rank': rank
+            })
+
+        return Response({
+            "success": True,
+            "message": "Camera-wise Security summary retrieved successfully.",
+            "data": camera_data
+        }, status=status.HTTP_200_OK)
+
+
+class SecurityViolatioReportDetailsView(APIView):
+    permission_classes = [SecurityPermission]
+
+    def get(self, request):
+        user = request.user
+        tent_ids = request.query_params.get('tent_ids')
+        start_date_time_str = request.GET.get('start_date_time')
+        end_date_time_str = request.GET.get('end_date_time')
+        paginate = True if request.GET.get('paginate', "true") == "true" else False
+        page = int(request.GET.get('page', 1))
+        itemsPerPage = int(request.GET.get('itemsPerPage', 10))
+
+        start_date_time = parse_datetime(start_date_time_str) if isinstance(
+            start_date_time_str, str) else None
+        end_date_time = parse_datetime(end_date_time_str) if isinstance(
+            end_date_time_str, str) else None
+
+        if not start_date_time or not end_date_time:
+            start_date_time, end_date_time = Current_saudi_time()
+
+        tents = Tent.objects.filter(company=user.company)
+        if not user.is_admin:
+            assigned_ids = user.assigned_tent.values_list('id', flat=True)
+            tents = tents.filter(id__in=assigned_ids)
+
+        if tent_ids:
+            try:
+                tent_id_list = list(map(int, tent_ids.split(',')))
+                tents = tents.filter(id__in=tent_id_list)
+            except ValueError:
+                return Response({"error": "Invalid tent_ids format. Use comma-separated integers."}, status=400)
+
+        result = []
+        for tent in tents:
+            cameras = Camera.objects.filter(tent=tent, type="security")
+            tent_violations = SecurityMonitoringReport.objects.filter(
+                is_annotated=True,
+                camera__in=cameras,
+                created_at__range=(start_date_time, end_date_time),
+                is_rejected=False
+            ).order_by('-id')
+
+            violations_records = tent_violations.filter(is_safe=False)
+
+            last_violation = violations_records.order_by('-created_at').first()
+            last_update = last_violation.created_at if last_violation else None
+            images = [
+                {
+                    'id': violation.id,
+                    "camera_sn": violation.camera.sn,
+                    'tent_name': violation.camera.tent.name,
+                    'image': request.build_absolute_uri(violation.image.url),
+                    'is_safe': violation.is_safe,
+                    'current_status': violation.current_status,
+                    'created_at': convert_utc_to_riyadh(violation.created_at)
+                }
+                for violation in violations_records
+                if violation.image
+            ]
+            if paginate:
+                paginated_images, total_images = custom_array_pagination(
+                    images, page, itemsPerPage)
+            else:
+                total_images = len(images)
+                paginated_images = images
+            result.append({
+                "tent_id": tent.id,
+                'tent': tent.name,
+                'violation_count': total_images,
+                'images': paginated_images,
+                "last_updated": convert_utc_to_riyadh(last_update) if last_update else None
+            })
+        data = {
+            'success': True,
+            'message': "Security Violation Report Data Retrieved Successfully",
+            'results': result[0] if tent_ids and len(tent_id_list) == 1 and result else result,
+        }
+        return Response(data, status=status.HTTP_200_OK)

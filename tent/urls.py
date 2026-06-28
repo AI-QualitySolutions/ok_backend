@@ -9,7 +9,7 @@ from tent.views import (
     TentTankGaurdCleanHistoryReportView, TentsWaterTankSampleCSVView,
     TentsWaterTankUploadView, TentSampleCSVView, TentUploadView, CountryDetail,
     FilterTentView, DashboardKitchen, DashboardFood, DashboardGuard, DashboardCounter,
-    DashboardSensor, TentCreateFromServerView, DashboardBuffet, DashboardCleaner, DashboardGarbage, DashboardRecycle, DashboardFallDetection, DashboardViolenceMonitoring, DashboardAbnormalActivity, DashboardSentiment
+    DashboardSensor, TentCreateFromServerView, DashboardBuffet, DashboardCleaner, DashboardGarbage, DashboardRecycle, DashboardFallDetection, DashboardViolenceMonitoring, DashboardAbnormalActivity, DashboardSentiment, DashboardChairDetection
 )
 
 # Router setup
@@ -75,6 +75,7 @@ urlpatterns = [
     path('dashboard/climb/', DashboardClimbMonitoring.as_view()),
     path('dashboard/abnormal-activity/', DashboardAbnormalActivity.as_view()),
     path('dashboard/sentiment/', DashboardSentiment.as_view()),
+    path('dashboard/chair/', DashboardChairDetection.as_view()),
 
 
     # Tent from server

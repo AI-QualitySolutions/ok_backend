@@ -111,6 +111,18 @@ class RecyclePermission(BasePermission):
         return False
 
 
+class SecurityPermission(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_admin:
+            return user.company and user.company.is_security
+        if user.is_staff:
+            return user.is_security
+        return False
+
+
 class BuffetPermission(BasePermission):
     def has_permission(self, request, view):
         user = request.user

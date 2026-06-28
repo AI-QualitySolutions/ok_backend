@@ -86,6 +86,17 @@ from camera.views import (
     EmptyChairDetectionHistoryReportView,
     EmptyChairDetectionReportChartView,
     EmptyChairLiveCountView,
+
+    # Security Monitoring
+    CreateSecurityMonitoringHistory,
+    SecurityMonitoringReportUpdateView,
+    SecurityMonitoringHistoryReportView,
+    SecurityIndicatorHistoryReportView,
+    SecurityMonitoringReportChartView,
+    SecurityMonitoringReportView,
+    TentSecuritySummaryView,
+    CameraSecuritySummaryView,
+    SecurityViolatioReportDetailsView,
 )
 
 # Router setup for ViewSets
@@ -277,4 +288,16 @@ urlpatterns = [
     path('empty-chair-detection-report/', EmptyChairDetectionHistoryReportView.as_view()),
     path('empty-chair-detection-chart/', EmptyChairDetectionReportChartView.as_view()),
     path('empty-chair-live-count/', EmptyChairLiveCountView.as_view()),
+
+    # === Security Monitoring ===
+    path('create-security-monitoring/', CreateSecurityMonitoringHistory.as_view()),
+    path('create-security-monitoring/<int:pk>/', CreateSecurityMonitoringHistory.as_view()),
+    path('update-security-monitoring/<int:pk>/', SecurityMonitoringReportUpdateView.as_view()),
+    path('security-monitoring-history/', SecurityMonitoringHistoryReportView.as_view()),
+    path('security-indicator-report/', SecurityIndicatorHistoryReportView.as_view()),
+    path('security-monitoring-report/', SecurityMonitoringReportView.as_view()),
+    path('security-monitoring-report-chart/', SecurityMonitoringReportChartView.as_view()),
+    path('tent-security-report-sort/', TentSecuritySummaryView.as_view()),
+    path('camera-security-report-sort/', CameraSecuritySummaryView.as_view()),
+    path('security-violation-report-details/', SecurityViolatioReportDetailsView.as_view()),
 ]

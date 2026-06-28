@@ -27,6 +27,7 @@ type_choices = [
     ("livestream", "livestream"),
     ("cleaners", "cleaners"),
     ("chairdetection", "chairdetection"),
+    ("security", "security"),
 ]
 
 
@@ -1316,3 +1317,65 @@ class EmptyChairDetectionReport(BaseModel):
     def __str__(self):
         company = self.camera.tent.company.name if self.camera.tent and self.camera.tent.company else "No Company"
         return f"Empty Chair Detection for Camera {company} from {self.start_time} to {self.end_time}"
+
+
+class SecurityMonitoringReport(BaseModel):
+    camera = models.ForeignKey(
+        Camera,
+        on_delete=models.CASCADE,
+        null=False,
+        blank=False,
+        related_name="security_monitoring_histories",
+    )
+    is_safe = models.BooleanField(default=True)
+    violation_list = models.JSONField(null=True, blank=True)
+    annotator_status = models.JSONField(null=True, blank=True)
+    current_status = models.JSONField(null=True, blank=True)
+    is_annotated = models.BooleanField(default=False)
+    is_ai_annotated = models.BooleanField(default=False)
+    ai_annotation_time = models.DateTimeField(null=True, blank=True, default=None)
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    is_rejected = models.BooleanField(default=False)
+    image = models.ImageField(
+        upload_to="security_monitoring_history/%Y/%m/%d/",
+        null=True,
+        blank=True,
+    )
+    annotator = models.ForeignKey(
+        "authentication.MyUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        related_name="security_monitor_history",
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["camera", "is_annotated", "-created_at"],
+                name="security_gal_idx",
+                condition=models.Q(is_rejected=False, image__isnull=False) & ~models.Q(image=""),
+            ),
+            models.Index(
+                fields=["is_annotated", "is_rejected", "created_at"],
+                name="security_acc_idx",
+            ),
+        ]
+
+    @property
+    def ai_status(self):
+        return self.violation_list
+
+    def save(self, *args, **kwargs):
+        self.current_status = self.annotator_status if self.is_annotated else self.violation_list
+        if isinstance(self.current_status, (list, dict)):
+            self.is_safe = len(self.current_status) == 0
+        else:
+            self.is_safe = True
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        company = self.camera.tent.company.name if self.camera.tent and self.camera.tent.company else "No Company"
+        return f"Security Monitoring for Camera {company} from {self.start_time} to {self.end_time}"

@@ -5,7 +5,7 @@ from datetime import datetime
 
 from camera.models import (Camera, CameraHeartbeat,
                            CounterHistory, GuardPresenceHistory,   KitchenImage,
-                           KitchenViolationReport, AGGFViolationReport, SmokingViolationReport, FaceDetectionReport, GarbageMonitoringReport, RecycleMonitoringReport, FallDetectionMonitoringReport, ViolenceMonitoringReport, CrowdMonitoringReport, WallClimbMonitoringReport, AbnormalActivities, BuffetViolationReport, BathroomMonitoringHistory, SentimentAnalysis, CameraStatus, CameraType, CleanersPresenceHistory, EmptyChairDetectionReport)
+                           KitchenViolationReport, AGGFViolationReport, SmokingViolationReport, FaceDetectionReport, GarbageMonitoringReport, RecycleMonitoringReport, FallDetectionMonitoringReport, ViolenceMonitoringReport, CrowdMonitoringReport, WallClimbMonitoringReport, AbnormalActivities, BuffetViolationReport, BathroomMonitoringHistory, SentimentAnalysis, CameraStatus, CameraType, CleanersPresenceHistory, EmptyChairDetectionReport, SecurityMonitoringReport)
 from tent.models import Tent, TentGate
 from django.core.exceptions import ValidationError
 
@@ -1359,3 +1359,59 @@ class EmptyChairDetectionReportSerializer(serializers.ModelSerializer):
         if isinstance(annotator_status, list):
             data['annotator_status'] = annotator_status[0] if annotator_status else None
         return super().to_internal_value(data)
+
+
+class SecurityMonitoringReportSerializer(serializers.ModelSerializer):
+    camera_type = serializers.SerializerMethodField(read_only=True)
+    image = serializers.SerializerMethodField()
+    camera_sn = serializers.SerializerMethodField(read_only=True)
+    tent_name = serializers.SerializerMethodField(read_only=True)
+    time = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SecurityMonitoringReport
+        fields = (
+            'id', 'camera', 'is_safe', 'violation_list', 'current_status', 'annotator_status',
+            'ai_status', 'start_time', 'end_time', 'image',
+            'created_at', 'updated_at', 'camera_type', 'is_annotated',
+            'tent_name', 'camera_sn', 'is_rejected',
+            'is_ai_annotated', 'ai_annotation_time', 'time',
+        )
+
+    def get_time(self, obj):
+        return obj.created_at
+
+    def get_camera_type(self, obj):
+        return obj.camera.type if obj.camera else None
+
+    def get_camera_sn(self, obj):
+        return obj.camera.sn if obj.camera else None
+
+    def get_tent_name(self, obj):
+        return obj.camera.tent.name if obj.camera and obj.camera.tent else None
+
+    def get_image(self, obj):
+        if obj.image and settings.DEBUG:
+            return f"{settings.BASE_URL}{obj.image.url}"
+        return obj.image.url if obj.image else None
+
+    def create(self, validated_data):
+        image = self.context['request'].FILES.get('image', None)
+        instance = SecurityMonitoringReport.objects.create(**validated_data)
+        if image:
+            instance.image = image
+            instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        annotator_status = validated_data.get('annotator_status', None)
+        is_rejected = validated_data.get('is_rejected', False)
+
+        instance.is_rejected = is_rejected
+        if annotator_status is not None:
+            instance.annotator_status = annotator_status
+            instance.is_annotated = True
+            instance.annotator = self.context['request'].user
+
+        instance.save()
+        return instance

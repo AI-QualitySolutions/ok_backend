@@ -91,3 +91,9 @@ def match_empty_chair_detection_key(provided_key):
     if settings.EMPTY_CHAIR_DETECTION_KEY != provided_key:
         raise PermissionDenied("Invalid empty chair detection secret key.")
     return True
+
+
+def match_security_detection_key(provided_key):
+    if settings.SECURITY_DETECTION_KEY != provided_key:
+        raise PermissionDenied("Invalid security detection secret key.")
+    return True
