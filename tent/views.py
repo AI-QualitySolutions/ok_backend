@@ -3252,7 +3252,6 @@ class DashboardCleaner(APIView):
                     camera=guard_camera,
                     start_time__gte=start_date_time,
                     end_time__lte=end_date_time,
-                    is_annotated=True,
                     is_rejected=False,
                 )
                 .values('start_time', 'end_time')

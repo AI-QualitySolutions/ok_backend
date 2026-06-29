@@ -6252,7 +6252,7 @@ class CleanerCardViewData(APIView):
                 camera_id__in=all_bath_cam_ids,
                 start_time__gte=start_date_time,
                 end_time__lte=end_date_time,
-                is_annotated=True,
+                is_rejected=False,
             ).order_by('camera_id', 'start_time')
         )
         bath_histories_by_cam = defaultdict(list)
