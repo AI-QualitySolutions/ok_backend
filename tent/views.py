@@ -44,7 +44,7 @@ from tent.serializers import (
 )
 from tent.utils import generate_csv_response, CustomPagination
 
-from camera.models import AbnormalActivities, Camera, CounterHistory, CrowdMonitoringReport, SentimentAnalysis, KitchenViolationReport, GarbageMonitoringReport, RecycleMonitoringReport, FallDetectionMonitoringReport, ViolenceMonitoringReport, GuardPresenceHistory, BuffetViolationReport, BathroomMonitoringHistory, WallClimbMonitoringReport, EmptyChairDetectionReport
+from camera.models import AbnormalActivities, Camera, CounterHistory, CrowdMonitoringReport, SentimentAnalysis, KitchenViolationReport, GarbageMonitoringReport, RecycleMonitoringReport, FallDetectionMonitoringReport, ViolenceMonitoringReport, GuardPresenceHistory, BuffetViolationReport, BathroomMonitoringHistory, WallClimbMonitoringReport, EmptyChairDetectionReport, CleanersPresenceHistory
 from camera.views import smart_aggregate
 from camera.serializers import CameraSerializer
 
@@ -3240,25 +3240,30 @@ class DashboardCleaner(APIView):
 
         for tent in tents:
             guard_camera = Camera.objects.filter(
-                tent=tent, type="bathroom").first()
+                tent=tent, type="cleaners").first()
 
             is_sensor_available = False
             if guard_camera:
                 is_sensor_available = True
 
-            history_qs = BathroomMonitoringHistory.objects.filter(
-                camera=guard_camera,
-                start_time__gte=start_date_time,
-                end_time__lte=end_date_time,
-                is_annotated=True,
-                is_rejected=False
-            ).order_by('start_time')
+            # Group by time window, summing cleaner_count across all person classes
+            history_qs = (
+                CleanersPresenceHistory.objects.filter(
+                    camera=guard_camera,
+                    start_time__gte=start_date_time,
+                    end_time__lte=end_date_time,
+                    is_annotated=True,
+                    is_rejected=False,
+                )
+                .values('start_time', 'end_time')
+                .annotate(total_count=Sum('cleaner_count'))
+                .order_by('start_time')
+            )
 
             if history_qs:
                 last_instance = history_qs.last()
-                current_guards = last_instance.cleaner_count or 0
-
-                current_guard_state = False if current_guards == 0 else True
+                current_guards = last_instance['total_count'] or 0
+                current_guard_state = current_guards > 0
             else:
                 current_guards = 0
                 current_guard_state = False
@@ -3268,13 +3273,13 @@ class DashboardCleaner(APIView):
             last_end_time = None  # track the end time of the previous entry
 
             for entry in history_qs:
-                if entry.cleaner_count == 0 and entry.start_time and entry.end_time:
+                if entry['total_count'] == 0 and entry['start_time'] and entry['end_time']:
                     # duration in minutes
-                    duration = (entry.end_time -
-                                entry.start_time).total_seconds() / 60.0
+                    duration = (entry['end_time'] -
+                                entry['start_time']).total_seconds() / 60.0
 
                     if last_end_time:
-                        time_gap = (entry.start_time -
+                        time_gap = (entry['start_time'] -
                                     last_end_time).total_seconds()
                         if time_gap > 5:  # if the gap is more than 5 seconds
                             count_duration = 0  # reset
@@ -3284,7 +3289,7 @@ class DashboardCleaner(APIView):
                         no_show_time += int(duration)
                         count_duration = 0
 
-                    last_end_time = entry.end_time  # update last_end_time
+                    last_end_time = entry['end_time']
 
                 else:
                     count_duration = 0

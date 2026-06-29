@@ -29,7 +29,7 @@ from camera.views import (
     CreateBuffetViolationFromHumanReportView,
     CreateCameraHeartbeatView, CreateSentimentAnalysisView,
     CleanIndicatorHistoryReportView, GuardPresenceHistoryReportView, CounterHistoryReportView,
-    CreateGarbageMonitoringHistory, CreateRecycleMonitoringHistory, CreateCleanersPresenceHistory, KitchenHistoryReport, BuffetHistoryViewReport, 
+    CreateGarbageMonitoringHistory, CreateRecycleMonitoringHistory, CreateCleanersPresenceHistory, KitchenHistoryReport, BuffetHistoryViewReport,
     SentimentAnalysisReportView, GuardPresenceHistoryReportNoShowPeriodView,
     
     # Fall Detection
