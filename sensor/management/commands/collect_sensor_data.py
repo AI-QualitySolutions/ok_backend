@@ -64,6 +64,7 @@ KEY_LIST = [
     "eu1777736513953R8gY3", # sensor_ai@outlook.com
     "eu1777812674314MqV08",
     "eu1631029393503Ac9ox", # Sensor farm
+    "eu1767183585804GFUar"
 ]
 
 
